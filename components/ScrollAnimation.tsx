@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 const TOTAL_FRAMES = 120;
-const SCROLL_HEIGHT_VH = 400; // How many viewport heights the scroll area spans
+const FPS = 30;
+const FRAME_DURATION = 1000 / FPS;
+const SCROLL_HEIGHT_VH = 200; // Enough height to keep canvas sticky while animation plays
 
 export default function ScrollAnimation() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -12,12 +14,13 @@ export default function ScrollAnimation() {
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const sizeRef = useRef({ w: 0, h: 0 });
   const lastFrameRef = useRef(-1);
-  const rafRef = useRef<number | null>(null);
   const bgColorRef = useRef("#FFFFFF");
 
   const [loaded, setLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [bgColor, setBgColor] = useState("#FFFFFF");
+  const [animationStarted, setAnimationStarted] = useState(false);
+  const [animationDone, setAnimationDone] = useState(false);
 
   const setupCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -44,7 +47,7 @@ export default function ScrollAnimation() {
 
   // Cover mode — image fills entire viewport, no visible edges
   const drawFrame = useCallback((frameIndex: number) => {
-    if (frameIndex === lastFrameRef.current) return; // Skip duplicate draws
+    if (frameIndex === lastFrameRef.current) return;
     lastFrameRef.current = frameIndex;
 
     const ctx = ctxRef.current;
@@ -57,11 +60,9 @@ export default function ScrollAnimation() {
 
     let dw: number, dh: number;
     if (viewRatio > imgRatio) {
-      // Viewport wider than image — fit to width
       dw = w;
       dh = w / imgRatio;
     } else {
-      // Viewport taller than image — fit to height
       dh = h;
       dw = h * imgRatio;
     }
@@ -74,43 +75,57 @@ export default function ScrollAnimation() {
     ctx.drawImage(img, dx, dy, dw, dh);
   }, []);
 
-  // Scroll handler — maps scroll position directly to frame index
-  const onScroll = useCallback(() => {
-    if (!loaded || !sectionRef.current) return;
+  // Detect when animation section enters viewport → trigger auto-play
+  useEffect(() => {
+    if (!loaded || animationStarted) return;
 
     const section = sectionRef.current;
-    const rect = section.getBoundingClientRect();
-    const sectionTop = rect.top;
-    const sectionHeight = rect.height - window.innerHeight;
+    if (!section) return;
 
-    // How far through the scroll section are we? (0 to 1)
-    const progress = Math.max(0, Math.min(1, -sectionTop / sectionHeight));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setAnimationStarted(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.05 },
+    );
 
-    const frameIndex = Math.min(TOTAL_FRAMES - 1, Math.floor(progress * TOTAL_FRAMES));
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [loaded, animationStarted]);
 
-    drawFrame(frameIndex);
-  }, [loaded, drawFrame]);
-
-  // Use rAF-throttled scroll listener for 60fps
+  // Auto-play animation at fixed FPS once triggered
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || !animationStarted || animationDone) return;
 
-    const handleScroll = () => {
-      if (rafRef.current) return; // Already scheduled
-      rafRef.current = requestAnimationFrame(() => {
-        onScroll();
-        rafRef.current = null;
-      });
+    let lastTime = 0;
+    let currentFrame = 0;
+    let rafId: number;
+
+    const animate = (timestamp: number) => {
+      if (!lastTime) lastTime = timestamp;
+      const elapsed = timestamp - lastTime;
+
+      if (elapsed >= FRAME_DURATION) {
+        lastTime = timestamp - (elapsed % FRAME_DURATION);
+        currentFrame++;
+        if (currentFrame >= TOTAL_FRAMES) {
+          drawFrame(TOTAL_FRAMES - 1);
+          setAnimationDone(true);
+          return;
+        }
+        drawFrame(currentFrame);
+      }
+
+      rafId = requestAnimationFrame(animate);
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll(); // Initial draw
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [loaded, onScroll]);
+    drawFrame(0);
+    rafId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafId);
+  }, [loaded, animationStarted, animationDone, drawFrame]);
 
   // Preload images
   useEffect(() => {
@@ -171,12 +186,11 @@ export default function ScrollAnimation() {
         sizeRef.current = { w: 0, h: 0 };
         lastFrameRef.current = -1;
         setupCanvas();
-        onScroll();
       }
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [loaded, setupCanvas, onScroll]);
+  }, [loaded, setupCanvas]);
 
   return (
     <>
@@ -196,9 +210,8 @@ export default function ScrollAnimation() {
         </div>
       )}
 
-      {/* Scroll section — the tall container that drives the animation */}
+      {/* Animation section */}
       <div ref={sectionRef} style={{ height: `${SCROLL_HEIGHT_VH}vh` }} className="relative">
-        {/* Sticky canvas — stays fixed while scrolling through the section */}
         <div className="sticky top-0 h-screen w-full overflow-hidden">
           <canvas
             ref={canvasRef}
@@ -206,7 +219,7 @@ export default function ScrollAnimation() {
             style={{ background: "#FFFFFF", willChange: "transform", transform: "translateZ(0)" }}
           />
 
-          {/* Edge feathering — weiche Ränder damit Animation nahtlos wirkt */}
+          {/* Edge feathering — soft edges so animation blends seamlessly */}
           <div
             className="absolute inset-0 pointer-events-none z-10"
             style={{

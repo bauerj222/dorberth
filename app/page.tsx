@@ -95,7 +95,7 @@ export default function Home() {
             initial={{ opacity: 0, x: 32 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.9, delay: 0.15, ease: [0.32, 0.72, 0, 1] }}
-            className="relative aspect-[4/3] md:aspect-square rounded-3xl overflow-hidden shadow-2xl"
+            className="relative aspect-[4/3] md:aspect-square overflow-hidden"
           >
             <Image
               src="/start_frame.png"
@@ -104,6 +104,15 @@ export default function Home() {
               priority
               className="object-cover"
             />
+            {/* Edges fade into background so image blends seamlessly */}
+            <div className="absolute inset-0 pointer-events-none" style={{
+              background: `
+                linear-gradient(to right, var(--color-background) 0%, transparent 15%),
+                linear-gradient(to left, var(--color-background) 0%, transparent 10%),
+                linear-gradient(to bottom, var(--color-background) 0%, transparent 20%),
+                linear-gradient(to top, var(--color-background) 0%, transparent 15%)
+              `,
+            }} />
           </motion.div>
         </div>
       </section>
