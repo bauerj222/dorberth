@@ -56,7 +56,7 @@ export default function Home() {
     <main>
       {/* Hero */}
       <section className="relative z-10 bg-background min-h-screen flex items-center overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 w-full grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center py-32 lg:py-0">
+        <div className="max-w-7xl mx-auto px-4 w-full grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-16 items-center py-32 md:py-0">
           <motion.div
             initial={{ opacity: 0, x: -32 }}
             animate={{ opacity: 1, x: 0 }}
@@ -95,7 +95,7 @@ export default function Home() {
             initial={{ opacity: 0, x: 32 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.9, delay: 0.15, ease: [0.32, 0.72, 0, 1] }}
-            className="relative aspect-[4/3] lg:aspect-square rounded-3xl overflow-hidden shadow-2xl"
+            className="relative aspect-[4/3] md:aspect-square rounded-3xl overflow-hidden shadow-2xl"
           >
             <Image
               src="/start_frame.png"

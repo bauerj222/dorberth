@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion } from "framer-motion";
 
 const TOTAL_FRAMES = 120;
 const SCROLL_HEIGHT_VH = 400; // How many viewport heights the scroll area spans
@@ -18,7 +17,7 @@ export default function ScrollAnimation() {
 
   const [loaded, setLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
-  const [animationDone, setAnimationDone] = useState(false);
+  const [bgColor, setBgColor] = useState("#FFFFFF");
 
   const setupCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -89,15 +88,8 @@ export default function ScrollAnimation() {
 
     const frameIndex = Math.min(TOTAL_FRAMES - 1, Math.floor(progress * TOTAL_FRAMES));
 
-    // Check if animation is complete
-    if (progress >= 1 && !animationDone) {
-      setAnimationDone(true);
-    } else if (progress < 1 && animationDone) {
-      setAnimationDone(false);
-    }
-
     drawFrame(frameIndex);
-  }, [loaded, drawFrame, animationDone]);
+  }, [loaded, drawFrame]);
 
   // Use rAF-throttled scroll listener for 60fps
   useEffect(() => {
@@ -161,7 +153,9 @@ export default function ScrollAnimation() {
         if (tmpCtx) {
           tmpCtx.drawImage(img, 0, 0);
           const pixel = tmpCtx.getImageData(2, 2, 1, 1).data;
-          bgColorRef.current = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+          const color = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+          bgColorRef.current = color;
+          setBgColor(color);
         }
       } catch { /* keep default */ }
 
@@ -195,7 +189,7 @@ export default function ScrollAnimation() {
               <span className="text-muted-foreground text-[10px] font-medium tracking-[0.2em] uppercase">Meisterbetrieb seit 1985</span>
             </div>
             <div className="w-48 h-[2px] bg-black/10 rounded-full overflow-hidden">
-              <motion.div className="h-full bg-primary rounded-full" initial={{ width: "0%" }} animate={{ width: `${loadProgress}%` }} transition={{ duration: 0.2, ease: "easeOut" }} />
+              <div className="h-full bg-primary rounded-full transition-all duration-200 ease-out" style={{ width: `${loadProgress}%` }} />
             </div>
             <span className="text-muted-foreground text-xs font-medium tracking-widest uppercase">{loadProgress}%</span>
           </div>
@@ -212,24 +206,18 @@ export default function ScrollAnimation() {
             style={{ background: "#FFFFFF", willChange: "transform", transform: "translateZ(0)" }}
           />
 
-          {/* Scroll indicator — only visible at start */}
-          {loaded && !animationDone && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 1 }}
-              className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 pointer-events-none"
-            >
-              <span className="text-muted-foreground text-xs font-medium tracking-[0.3em] uppercase">Scrollen</span>
-              <motion.div
-                animate={{ y: [0, 8, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                className="w-5 h-8 border-2 border-foreground/20 rounded-full flex items-start justify-center p-1"
-              >
-                <motion.div className="w-1 h-2 bg-foreground/30 rounded-full" />
-              </motion.div>
-            </motion.div>
-          )}
+          {/* Edge feathering — weiche Ränder damit Animation nahtlos wirkt */}
+          <div
+            className="absolute inset-0 pointer-events-none z-10"
+            style={{
+              background: `
+                linear-gradient(to right, ${bgColor} 0%, transparent 6%),
+                linear-gradient(to left, ${bgColor} 0%, transparent 6%),
+                linear-gradient(to bottom, ${bgColor} 0%, transparent 6%),
+                linear-gradient(to top, ${bgColor} 0%, transparent 6%)
+              `,
+            }}
+          />
         </div>
       </div>
     </>
