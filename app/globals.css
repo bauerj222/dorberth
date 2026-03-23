@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Maler Dorberth — Light Mode, Clean White */
+  /* Brand: #008080 (Teal) */
+  /* Background: #FFFFFF (Pure White — frische Wand) */
+
+  --color-background: #FFFFFF;
+  --color-foreground: #002B2B;
+
+  --color-card: #FFFFFF;
+  --color-card-foreground: #004D4D;
+
+  --color-primary: #008080;
+  --color-primary-foreground: #FFFFFF;
+
+  --color-muted: #F0FDFD;
+  --color-muted-foreground: #5A7A7A;
+
+  --color-border: #B2E8E8;
+
+  /* Teal shade scale */
+  --color-primary-50: #F0FDFD;
+  --color-primary-100: #CCFBFB;
+  --color-primary-200: #99F6F6;
+  --color-primary-300: #5EECEC;
+  --color-primary-400: #2DD6D6;
+  --color-primary-500: #00BFBF;
+  --color-primary-600: #009E9E;
+  --color-primary-700: #008080;
+  --color-primary-800: #006666;
+  --color-primary-900: #004D4D;
+  --color-primary-950: #002B2B;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted-foreground);
+}

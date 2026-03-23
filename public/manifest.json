@@ -1,0 +1,9 @@
+{
+  "name": "Maler Dorberth",
+  "short_name": "Dorberth",
+  "description": "Ihr Maler aus Burgfarrnbach — Meisterbetrieb seit 1985",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#008080"
+}
