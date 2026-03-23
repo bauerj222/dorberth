@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion } from "framer-motion";
 import ScrollAnimation from "@/components/ScrollAnimation";
 
@@ -53,6 +54,61 @@ const SERVICES = [
 export default function Home() {
   return (
     <main>
+      {/* Hero */}
+      <section className="relative z-10 bg-background min-h-screen flex items-center overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 w-full grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center py-32 lg:py-0">
+          <motion.div
+            initial={{ opacity: 0, x: -32 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.9, ease: [0.32, 0.72, 0, 1] }}
+          >
+            <span className="inline-block rounded-full px-3.5 py-1.5 text-[10px] uppercase tracking-[0.2em] font-medium bg-primary/10 text-primary mb-6">
+              Meisterbetrieb seit 1985
+            </span>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-foreground tracking-tight leading-[1.1] mb-6">
+              Ihr Maler aus{" "}
+              <span className="text-primary">Burgfarrnbach</span>
+            </h1>
+            <p className="text-lg lg:text-xl text-muted-foreground max-w-md mb-10 leading-relaxed">
+              Professionelle Maler- und Lackierarbeiten mit über 40 Jahren Erfahrung.
+              Von Fassadengestaltung bis dekorativer Wandtechnik.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <a
+                href="/contact"
+                className="px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-full hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 shadow-[0_4px_20px_rgba(0,128,128,0.15)] text-center"
+                style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+              >
+                Kostenloses Angebot
+              </a>
+              <a
+                href="tel:091197794971"
+                className="px-8 py-4 border border-foreground/20 text-foreground font-medium rounded-full hover:bg-foreground/5 hover:border-foreground/40 transition-all duration-500 text-center"
+                style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+              >
+                0911 / 977 949 71
+              </a>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 32 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.9, delay: 0.15, ease: [0.32, 0.72, 0, 1] }}
+            className="relative aspect-[4/3] lg:aspect-square rounded-3xl overflow-hidden shadow-2xl"
+          >
+            <Image
+              src="/start_frame.png"
+              alt="Maler Dorberth — Professionelle Malerarbeiten"
+              fill
+              priority
+              className="object-cover"
+            />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Scroll Animation */}
       <ScrollAnimation />
 
       {/* Stats */}
