@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import Image from "next/image";
 
 const TOTAL_FRAMES = 120;
 const FPS = 30;
 const FRAME_DURATION = 1000 / FPS;
-const SCROLL_HEIGHT_VH = 200; // Enough height to keep canvas sticky while animation plays
+const SCROLL_HEIGHT_VH = 300;
 
 export default function ScrollAnimation() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -16,11 +17,17 @@ export default function ScrollAnimation() {
   const lastFrameRef = useRef(-1);
   const bgColorRef = useRef("#FFFFFF");
 
+  // DOM refs for scroll-driven animation (no re-renders)
+  const textRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
+
   const [loaded, setLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [bgColor, setBgColor] = useState("#FFFFFF");
   const [animationStarted, setAnimationStarted] = useState(false);
   const [animationDone, setAnimationDone] = useState(false);
+  const animationTriggeredRef = useRef(false);
 
   const setupCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -45,7 +52,7 @@ export default function ScrollAnimation() {
     }
   }, []);
 
-  // Cover mode — image fills entire viewport, no visible edges
+  // Cover mode — image fills entire viewport
   const drawFrame = useCallback((frameIndex: number) => {
     if (frameIndex === lastFrameRef.current) return;
     lastFrameRef.current = frameIndex;
@@ -75,26 +82,48 @@ export default function ScrollAnimation() {
     ctx.drawImage(img, dx, dy, dw, dh);
   }, []);
 
-  // Detect when animation section enters viewport → trigger auto-play
+  // Scroll-driven hero transition (direct DOM manipulation, no re-renders)
   useEffect(() => {
-    if (!loaded || animationStarted) return;
+    if (!loaded) return;
 
-    const section = sectionRef.current;
-    if (!section) return;
+    const handleScroll = () => {
+      const section = sectionRef.current;
+      if (!section) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setAnimationStarted(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.05 },
-    );
+      const rect = section.getBoundingClientRect();
+      const sectionHeight = rect.height - window.innerHeight;
+      const progress = Math.max(0, Math.min(1, -rect.top / sectionHeight));
 
-    observer.observe(section);
-    return () => observer.disconnect();
-  }, [loaded, animationStarted]);
+      // Phase 1: Text fades out (progress 0 → 0.12)
+      const textOpacity = Math.max(0, 1 - progress / 0.12);
+      if (textRef.current) {
+        textRef.current.style.opacity = String(textOpacity);
+        textRef.current.style.transform = `translateY(${-progress * 120}px)`;
+      }
+
+      // Phase 2: Gradient overlay fades out (progress 0.05 → 0.2)
+      const overlayOpacity = Math.max(0, 1 - (progress - 0.05) / 0.15);
+      if (overlayRef.current) {
+        overlayRef.current.style.opacity = String(overlayOpacity);
+      }
+
+      // Phase 3: Canvas appears (progress 0.18 → 0.22)
+      const canvasOpacity = Math.min(1, Math.max(0, (progress - 0.18) / 0.04));
+      if (canvasWrapRef.current) {
+        canvasWrapRef.current.style.opacity = String(canvasOpacity);
+      }
+
+      // Phase 4: Trigger auto-play (progress > 0.22)
+      if (progress > 0.22 && !animationTriggeredRef.current) {
+        animationTriggeredRef.current = true;
+        setAnimationStarted(true);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll(); // Initial state
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [loaded]);
 
   // Auto-play animation at fixed FPS once triggered
   useEffect(() => {
@@ -134,7 +163,7 @@ export default function ScrollAnimation() {
     const images: HTMLImageElement[] = new Array(TOTAL_FRAMES);
 
     for (let i = 0; i < TOTAL_FRAMES; i++) {
-      const img = new Image();
+      const img = new window.Image();
       img.src = `/sequence/frame_${i}.webp`;
       img.onload = () => {
         const finish = () => {
@@ -156,7 +185,7 @@ export default function ScrollAnimation() {
     }
   }, [setupCanvas]);
 
-  // Sample BG color from first frame + initial draw
+  // Sample BG color from first frame
   useEffect(() => {
     if (loaded && imagesRef.current[0]) {
       const img = imagesRef.current[0];
@@ -210,16 +239,29 @@ export default function ScrollAnimation() {
         </div>
       )}
 
-      {/* Animation section */}
+      {/* Combined Hero + Animation section */}
       <div ref={sectionRef} style={{ height: `${SCROLL_HEIGHT_VH}vh` }} className="relative">
         <div className="sticky top-0 h-screen w-full overflow-hidden">
-          <canvas
-            ref={canvasRef}
-            className="absolute inset-0 w-full h-full"
-            style={{ background: "#FFFFFF", willChange: "transform", transform: "translateZ(0)" }}
+
+          {/* Layer 1: Full-screen start frame image (always visible as base) */}
+          <Image
+            src="/start_frame.png"
+            alt="Maler Dorberth"
+            fill
+            priority
+            className="object-cover"
           />
 
-          {/* Edge feathering — soft edges so animation blends seamlessly */}
+          {/* Layer 2: Canvas (fades in over the start image, then plays animation) */}
+          <div ref={canvasWrapRef} className="absolute inset-0" style={{ opacity: 0 }}>
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 w-full h-full"
+              style={{ willChange: "transform", transform: "translateZ(0)" }}
+            />
+          </div>
+
+          {/* Layer 3: Edge feathering */}
           <div
             className="absolute inset-0 pointer-events-none z-10"
             style={{
@@ -231,6 +273,53 @@ export default function ScrollAnimation() {
               `,
             }}
           />
+
+          {/* Layer 4: Left gradient overlay — creates "image on right" hero effect */}
+          <div
+            ref={overlayRef}
+            className="absolute inset-0 pointer-events-none z-20"
+            style={{
+              background: "linear-gradient(to right, #FFFFFF 0%, #FFFFFF 35%, rgba(255,255,255,0.85) 50%, transparent 70%)",
+            }}
+          />
+
+          {/* Layer 5: Hero text — fades out and slides up on scroll */}
+          <div
+            ref={textRef}
+            className="absolute inset-0 z-30 flex items-center pointer-events-none"
+          >
+            <div className="max-w-7xl mx-auto px-4 w-full">
+              <div className="max-w-lg pointer-events-auto">
+                <span className="inline-block rounded-full px-3.5 py-1.5 text-[10px] uppercase tracking-[0.2em] font-medium bg-primary/10 text-primary mb-6">
+                  Meisterbetrieb seit 1985
+                </span>
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-foreground tracking-tight leading-[1.1] mb-6">
+                  Ihr Maler aus{" "}
+                  <span className="text-primary">Burgfarrnbach</span>
+                </h1>
+                <p className="text-lg lg:text-xl text-muted-foreground max-w-md mb-10 leading-relaxed">
+                  Professionelle Maler- und Lackierarbeiten mit über 40 Jahren Erfahrung.
+                  Von Fassadengestaltung bis dekorativer Wandtechnik.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <a
+                    href="/contact"
+                    className="px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-full hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 shadow-[0_4px_20px_rgba(0,128,128,0.15)] text-center"
+                    style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                  >
+                    Kostenloses Angebot
+                  </a>
+                  <a
+                    href="tel:091197794971"
+                    className="px-8 py-4 border border-foreground/20 text-foreground font-medium rounded-full hover:bg-foreground/5 hover:border-foreground/40 transition-all duration-500 text-center"
+                    style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                  >
+                    0911 / 977 949 71
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>
