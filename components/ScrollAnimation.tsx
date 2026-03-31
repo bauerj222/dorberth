@@ -103,7 +103,8 @@ export default function ScrollAnimation() {
 
     const dx = vw / 2 - centerX;
     const dy = vh / 2 - centerY;
-    const scale = Math.max(vw / rect.width, vh / rect.height);
+    // Only grow slightly — not to fullscreen, just "etwas größer"
+    const scale = 1.3;
 
     transformTargetRef.current = { dx, dy, scale };
   }, []);
