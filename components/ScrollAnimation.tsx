@@ -6,12 +6,12 @@ import Image from "next/image";
 const TOTAL_FRAMES = 120;
 const SCROLL_HEIGHT_VH = 400;
 
-// Scroll phases (as fraction of total scroll)
-const HERO_END = 0.08;        // Hero rests
-const TRANSITION_END = 0.18;  // Text fades, image grows to fullscreen
-const CANVAS_IN = 0.20;       // Canvas fades in over the image
-const ANIM_START = 0.20;      // Frame animation begins
-const ANIM_END = 1.0;         // Frame animation ends
+// Scroll phases
+const HERO_END = 0.08;
+const TRANSITION_END = 0.18;
+const CANVAS_IN = 0.20;
+const ANIM_START = 0.20;
+const ANIM_END = 1.0;
 
 export default function ScrollAnimation() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -23,7 +23,6 @@ export default function ScrollAnimation() {
   const bgColorRef = useRef("#FFFFFF");
   const rafRef = useRef<number | null>(null);
 
-  // Hero transition refs (direct DOM, no re-renders)
   const textRef = useRef<HTMLDivElement>(null);
   const heroImageRef = useRef<HTMLDivElement>(null);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
@@ -56,7 +55,6 @@ export default function ScrollAnimation() {
     }
   }, []);
 
-  // Cover mode — image fills entire viewport
   const drawFrame = useCallback((frameIndex: number) => {
     if (frameIndex === lastFrameRef.current) return;
     lastFrameRef.current = frameIndex;
@@ -86,34 +84,30 @@ export default function ScrollAnimation() {
     ctx.drawImage(img, dx, dy, dw, dh);
   }, []);
 
-  // Calculate transform to take hero image from its position to fullscreen
+  // Measure hero image grid position → calculate transform to fullscreen
   const computeTransform = useCallback(() => {
     const el = heroImageRef.current;
     if (!el) return;
 
-    // Reset transform to measure natural position
     const saved = el.style.transform;
     el.style.transform = "none";
-
     const rect = el.getBoundingClientRect();
-
     el.style.transform = saved;
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    const imgCenterX = rect.left + rect.width / 2;
-    const imgCenterY = rect.top + rect.height / 2;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
 
-    const dx = vw / 2 - imgCenterX;
-    const dy = vh / 2 - imgCenterY;
-    // Cover mode scale: image must fill entire viewport
+    const dx = vw / 2 - centerX;
+    const dy = vh / 2 - centerY;
     const scale = Math.max(vw / rect.width, vh / rect.height) * 1.02;
 
     transformTargetRef.current = { dx, dy, scale };
   }, []);
 
-  // Main scroll handler — drives everything
+  // Scroll handler
   useEffect(() => {
     if (!loaded) return;
 
@@ -131,40 +125,35 @@ export default function ScrollAnimation() {
         const sectionHeight = rect.height - window.innerHeight;
         const progress = Math.max(0, Math.min(1, -rect.top / sectionHeight));
 
-        // --- Phase 1: Hero text fade + slide up ---
+        // Text fade + slide up
         const textP = Math.max(0, Math.min(1, (progress - HERO_END) / (TRANSITION_END - HERO_END)));
         if (textRef.current) {
           textRef.current.style.opacity = String(1 - textP);
           textRef.current.style.transform = `translateY(${-textP * 80}px)`;
         }
 
-        // --- Phase 2: Hero image grows to fullscreen ---
+        // Image grows from grid position to fullscreen
         const { dx, dy, scale } = transformTargetRef.current;
         if (heroImageRef.current) {
-          const imgP = textP; // same timing as text
-          heroImageRef.current.style.transform = `translate(${dx * imgP}px, ${dy * imgP}px) scale(${1 + (scale - 1) * imgP})`;
+          heroImageRef.current.style.transform = `translate(${dx * textP}px, ${dy * textP}px) scale(${1 + (scale - 1) * textP})`;
+          heroImageRef.current.style.zIndex = textP > 0 ? "25" : "0";
 
-          // Fade out hero image as canvas takes over
           const fadeP = Math.max(0, Math.min(1, (progress - TRANSITION_END) / (CANVAS_IN - TRANSITION_END)));
           heroImageRef.current.style.opacity = String(1 - fadeP);
         }
 
-        // --- Phase 3: Canvas fades in ---
+        // Canvas fades in
         if (canvasWrapRef.current) {
           const canvasP = Math.max(0, Math.min(1, (progress - TRANSITION_END) / (CANVAS_IN - TRANSITION_END)));
           canvasWrapRef.current.style.opacity = String(canvasP);
         }
 
-        // --- Phase 4: Frame animation (scroll-linked, reversible) ---
+        // Frame animation (scroll-linked, reversible)
         if (progress >= ANIM_START) {
           const frameProgress = (progress - ANIM_START) / (ANIM_END - ANIM_START);
-          const frameIndex = Math.min(
-            TOTAL_FRAMES - 1,
-            Math.max(0, Math.floor(frameProgress * TOTAL_FRAMES)),
-          );
+          const frameIndex = Math.min(TOTAL_FRAMES - 1, Math.max(0, Math.floor(frameProgress * TOTAL_FRAMES)));
           drawFrame(frameIndex);
         } else {
-          // Before animation range — show frame 0
           drawFrame(0);
         }
       });
@@ -198,24 +187,17 @@ export default function ScrollAnimation() {
             setLoaded(true);
           }
         };
-        if (img.decode) {
-          img.decode().then(finish).catch(finish);
-        } else {
-          finish();
-        }
+        if (img.decode) { img.decode().then(finish).catch(finish); } else { finish(); }
       };
       img.onerror = () => {
         loadedCount++;
         setLoadProgress(Math.round((loadedCount / TOTAL_FRAMES) * 100));
-        if (loadedCount === TOTAL_FRAMES) {
-          imagesRef.current = images;
-          setLoaded(true);
-        }
+        if (loadedCount === TOTAL_FRAMES) { imagesRef.current = images; setLoaded(true); }
       };
     }
   }, [setupCanvas]);
 
-  // Sample BG color from first frame
+  // Sample BG color
   useEffect(() => {
     if (loaded && imagesRef.current[0]) {
       const img = imagesRef.current[0];
@@ -231,16 +213,13 @@ export default function ScrollAnimation() {
           bgColorRef.current = color;
           setBgColor(color);
         }
-      } catch {
-        /* keep default */
-      }
-
+      } catch { /* keep default */ }
       setupCanvas();
       drawFrame(0);
     }
   }, [loaded, drawFrame, setupCanvas]);
 
-  // Resize handler
+  // Resize
   useEffect(() => {
     const handleResize = () => {
       if (loaded) {
@@ -261,96 +240,45 @@ export default function ScrollAnimation() {
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white">
           <div className="flex flex-col items-center gap-8">
             <div className="flex flex-col items-center">
-              <span className="text-foreground text-2xl font-bold tracking-tight">
-                MALER DORBERTH
-              </span>
-              <span className="text-muted-foreground text-[10px] font-medium tracking-[0.2em] uppercase">
-                Meisterbetrieb seit 1985
-              </span>
+              <span className="text-foreground text-2xl font-bold tracking-tight">MALER DORBERTH</span>
+              <span className="text-muted-foreground text-[10px] font-medium tracking-[0.2em] uppercase">Meisterbetrieb seit 1985</span>
             </div>
             <div className="w-48 h-[2px] bg-black/10 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-200 ease-out"
-                style={{ width: `${loadProgress}%` }}
-              />
+              <div className="h-full bg-primary rounded-full transition-all duration-200 ease-out" style={{ width: `${loadProgress}%` }} />
             </div>
-            <span className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
-              {loadProgress}%
-            </span>
+            <span className="text-muted-foreground text-xs font-medium tracking-widest uppercase">{loadProgress}%</span>
           </div>
         </div>
       )}
 
-      {/* Combined Hero + Animation section */}
-      <div
-        ref={sectionRef}
-        style={{ height: `${SCROLL_HEIGHT_VH}vh` }}
-        className="relative"
-      >
-        <div className="sticky top-0 h-screen w-full overflow-hidden">
-          {/* Layer 1: Canvas (hidden initially, fades in after hero transition) */}
-          <div
-            ref={canvasWrapRef}
-            className="absolute inset-0 z-10"
-            style={{ opacity: 0 }}
-          >
+      {/* Hero + Animation */}
+      <div ref={sectionRef} style={{ height: `${SCROLL_HEIGHT_VH}vh` }} className="relative">
+        <div className="sticky top-0 h-screen w-full overflow-hidden bg-background">
+
+          {/* Canvas (behind everything, fades in after transition) */}
+          <div ref={canvasWrapRef} className="absolute inset-0 z-10" style={{ opacity: 0 }}>
             <canvas
               ref={canvasRef}
               className="absolute inset-0 w-full h-full"
-              style={{
-                willChange: "transform",
-                transform: "translateZ(0)",
-              }}
+              style={{ willChange: "transform", transform: "translateZ(0)" }}
             />
-          </div>
-
-          {/* Layer 2: Hero image — starts on the right, scales to fullscreen */}
-          <div
-            ref={heroImageRef}
-            className="absolute z-20 right-[4%] top-[12%] w-[40%] h-[76%] md:right-[5%] md:top-[10%] md:w-[42%] md:h-[80%]"
-            style={{ transformOrigin: "center center" }}
-          >
-            <Image
-              src="/start_frame.png"
-              alt="Maler Dorberth"
-              fill
-              priority
-              className="object-cover"
-            />
-            {/* Gradient edges — image blends seamlessly into background */}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: `
-                  linear-gradient(to right, #FFFFFF 0%, transparent 12%),
-                  linear-gradient(to left, #FFFFFF 0%, transparent 8%),
-                  linear-gradient(to bottom, #FFFFFF 0%, transparent 15%),
-                  linear-gradient(to top, #FFFFFF 0%, transparent 12%)
-                `,
-              }}
-            />
-          </div>
-
-          {/* Layer 3: Edge feathering for animation canvas */}
-          <div
-            className="absolute inset-0 pointer-events-none z-30"
-            style={{
+            {/* Edge feathering on canvas */}
+            <div className="absolute inset-0 pointer-events-none" style={{
               background: `
                 linear-gradient(to right, ${bgColor} 0%, transparent 5%),
                 linear-gradient(to left, ${bgColor} 0%, transparent 5%),
                 linear-gradient(to bottom, ${bgColor} 0%, transparent 5%),
                 linear-gradient(to top, ${bgColor} 0%, transparent 5%)
               `,
-            }}
-          />
+            }} />
+          </div>
 
-          {/* Layer 4: Hero text — fades out + slides up on scroll */}
-          <div
-            ref={textRef}
-            className="absolute inset-0 z-40 flex items-center pointer-events-none"
-          >
-            <div className="max-w-7xl mx-auto px-4 w-full">
-              <div className="max-w-lg pointer-events-auto">
+          {/* Hero grid layout — text left, image right */}
+          <div className="absolute inset-0 z-20 flex items-center">
+            <div className="max-w-7xl mx-auto px-4 w-full grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-16 items-center">
+
+              {/* Text column — fades out on scroll */}
+              <div ref={textRef}>
                 <span className="inline-block rounded-full px-3.5 py-1.5 text-[10px] uppercase tracking-[0.2em] font-medium bg-primary/10 text-primary mb-6">
                   Meisterbetrieb seit 1985
                 </span>
@@ -359,34 +287,54 @@ export default function ScrollAnimation() {
                   <span className="text-primary">Burgfarrnbach</span>
                 </h1>
                 <p className="text-lg lg:text-xl text-muted-foreground max-w-md mb-10 leading-relaxed">
-                  Professionelle Maler- und Lackierarbeiten mit über 40 Jahren
-                  Erfahrung. Von Fassadengestaltung bis dekorativer Wandtechnik.
+                  Professionelle Maler- und Lackierarbeiten mit über 40 Jahren Erfahrung.
+                  Von Fassadengestaltung bis dekorativer Wandtechnik.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <a
                     href="/contact"
                     className="px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-full hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 shadow-[0_4px_20px_rgba(0,128,128,0.15)] text-center"
-                    style={{
-                      transitionTimingFunction:
-                        "cubic-bezier(0.32, 0.72, 0, 1)",
-                    }}
+                    style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
                   >
                     Kostenloses Angebot
                   </a>
                   <a
                     href="tel:091197794971"
                     className="px-8 py-4 border border-foreground/20 text-foreground font-medium rounded-full hover:bg-foreground/5 hover:border-foreground/40 transition-all duration-500 text-center"
-                    style={{
-                      transitionTimingFunction:
-                        "cubic-bezier(0.32, 0.72, 0, 1)",
-                    }}
+                    style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
                   >
                     0911 / 977 949 71
                   </a>
                 </div>
               </div>
+
+              {/* Image column — grows to fullscreen on scroll */}
+              <div
+                ref={heroImageRef}
+                className="relative aspect-[4/3] md:aspect-square overflow-visible"
+                style={{ transformOrigin: "center center" }}
+              >
+                <Image
+                  src="/start_frame.png"
+                  alt="Maler Dorberth — Professionelle Malerarbeiten"
+                  fill
+                  priority
+                  className="object-cover"
+                />
+                {/* Gradient edges so image blends seamlessly */}
+                <div className="absolute inset-0 pointer-events-none" style={{
+                  background: `
+                    linear-gradient(to right, var(--color-background) 0%, transparent 12%),
+                    linear-gradient(to left, var(--color-background) 0%, transparent 8%),
+                    linear-gradient(to bottom, var(--color-background) 0%, transparent 15%),
+                    linear-gradient(to top, var(--color-background) 0%, transparent 12%)
+                  `,
+                }} />
+              </div>
+
             </div>
           </div>
+
         </div>
       </div>
     </>
