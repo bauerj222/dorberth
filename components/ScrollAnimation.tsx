@@ -7,10 +7,11 @@ const TOTAL_FRAMES = 120;
 const SCROLL_HEIGHT_VH = 400;
 
 // Scroll phases
-const HERO_END = 0.08;
-const TRANSITION_END = 0.18;
-const CANVAS_IN = 0.20;
-const ANIM_START = 0.20;
+const HERO_END = 0.06;
+const TRANSITION_END = 0.16;
+const CROSSFADE_START = 0.11;  // Canvas fades in while image is still scaling
+const CROSSFADE_END = 0.16;    // Crossfade finishes when scale finishes
+const ANIM_START = 0.16;
 const ANIM_END = 1.0;
 
 export default function ScrollAnimation() {
@@ -138,13 +139,13 @@ export default function ScrollAnimation() {
           heroImageRef.current.style.transform = `translate(${dx * textP}px, ${dy * textP}px) scale(${1 + (scale - 1) * textP})`;
           heroImageRef.current.style.zIndex = textP > 0 ? "25" : "0";
 
-          const fadeP = Math.max(0, Math.min(1, (progress - TRANSITION_END) / (CANVAS_IN - TRANSITION_END)));
+          const fadeP = Math.max(0, Math.min(1, (progress - CROSSFADE_START) / (CROSSFADE_END - CROSSFADE_START)));
           heroImageRef.current.style.opacity = String(1 - fadeP);
         }
 
-        // Canvas fades in
+        // Canvas fades in (during scaling, not after)
         if (canvasWrapRef.current) {
-          const canvasP = Math.max(0, Math.min(1, (progress - TRANSITION_END) / (CANVAS_IN - TRANSITION_END)));
+          const canvasP = Math.max(0, Math.min(1, (progress - CROSSFADE_START) / (CROSSFADE_END - CROSSFADE_START)));
           canvasWrapRef.current.style.opacity = String(canvasP);
         }
 
