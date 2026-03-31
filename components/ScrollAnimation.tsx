@@ -1,17 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import Image from "next/image";
 
 const TOTAL_FRAMES = 120;
 const SCROLL_HEIGHT_VH = 400;
 
 // Scroll phases
-const HERO_END = 0.06;
-const TRANSITION_END = 0.16;
-const CROSSFADE_START = 0.11;  // Canvas fades in while image is still scaling
-const CROSSFADE_END = 0.16;    // Crossfade finishes when scale finishes
-const ANIM_START = 0.16;
+const HERO_END = 0.06;        // Hero text visible
+const TRANSITION_END = 0.14;  // Hero panel fades away
+const ANIM_START = 0.14;      // Frame animation begins
 const ANIM_END = 1.0;
 
 export default function ScrollAnimation() {
@@ -24,10 +21,7 @@ export default function ScrollAnimation() {
   const bgColorRef = useRef("#FFFFFF");
   const rafRef = useRef<number | null>(null);
 
-  const textRef = useRef<HTMLDivElement>(null);
-  const heroImageRef = useRef<HTMLDivElement>(null);
-  const canvasWrapRef = useRef<HTMLDivElement>(null);
-  const transformTargetRef = useRef({ dx: 0, dy: 0, scale: 1 });
+  const heroPanelRef = useRef<HTMLDivElement>(null);
 
   const [loaded, setLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
@@ -85,35 +79,9 @@ export default function ScrollAnimation() {
     ctx.drawImage(img, dx, dy, dw, dh);
   }, []);
 
-  // Measure hero image grid position → calculate transform to fullscreen
-  const computeTransform = useCallback(() => {
-    const el = heroImageRef.current;
-    if (!el) return;
-
-    const saved = el.style.transform;
-    el.style.transform = "none";
-    const rect = el.getBoundingClientRect();
-    el.style.transform = saved;
-
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
-    const dx = vw / 2 - centerX;
-    const dy = vh / 2 - centerY;
-    // Only grow slightly — not to fullscreen, just "etwas größer"
-    const scale = 1.3;
-
-    transformTargetRef.current = { dx, dy, scale };
-  }, []);
-
   // Scroll handler
   useEffect(() => {
     if (!loaded) return;
-
-    computeTransform();
 
     const handleScroll = () => {
       if (rafRef.current) return;
@@ -127,27 +95,11 @@ export default function ScrollAnimation() {
         const sectionHeight = rect.height - window.innerHeight;
         const progress = Math.max(0, Math.min(1, -rect.top / sectionHeight));
 
-        // Text fade + slide up
-        const textP = Math.max(0, Math.min(1, (progress - HERO_END) / (TRANSITION_END - HERO_END)));
-        if (textRef.current) {
-          textRef.current.style.opacity = String(1 - textP);
-          textRef.current.style.transform = `translateY(${-textP * 80}px)`;
-        }
-
-        // Image grows from grid position to fullscreen
-        const { dx, dy, scale } = transformTargetRef.current;
-        if (heroImageRef.current) {
-          heroImageRef.current.style.transform = `translate(${dx * textP}px, ${dy * textP}px) scale(${1 + (scale - 1) * textP})`;
-          heroImageRef.current.style.zIndex = textP > 0 ? "25" : "0";
-
-          const fadeP = Math.max(0, Math.min(1, (progress - CROSSFADE_START) / (CROSSFADE_END - CROSSFADE_START)));
-          heroImageRef.current.style.opacity = String(1 - fadeP);
-        }
-
-        // Canvas fades in (during scaling, not after)
-        if (canvasWrapRef.current) {
-          const canvasP = Math.max(0, Math.min(1, (progress - CROSSFADE_START) / (CROSSFADE_END - CROSSFADE_START)));
-          canvasWrapRef.current.style.opacity = String(canvasP);
+        // Hero panel fades out + slides up
+        const heroP = Math.max(0, Math.min(1, (progress - HERO_END) / (TRANSITION_END - HERO_END)));
+        if (heroPanelRef.current) {
+          heroPanelRef.current.style.opacity = String(1 - heroP);
+          heroPanelRef.current.style.transform = `translateY(${-heroP * 60}px)`;
         }
 
         // Frame animation (scroll-linked, reversible)
@@ -168,7 +120,7 @@ export default function ScrollAnimation() {
       window.removeEventListener("scroll", handleScroll);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [loaded, drawFrame, computeTransform]);
+  }, [loaded, drawFrame]);
 
   // Preload images
   useEffect(() => {
@@ -228,12 +180,11 @@ export default function ScrollAnimation() {
         sizeRef.current = { w: 0, h: 0 };
         lastFrameRef.current = -1;
         setupCanvas();
-        computeTransform();
       }
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [loaded, setupCanvas, computeTransform]);
+  }, [loaded, setupCanvas]);
 
   return (
     <>
@@ -255,85 +206,67 @@ export default function ScrollAnimation() {
 
       {/* Hero + Animation */}
       <div ref={sectionRef} style={{ height: `${SCROLL_HEIGHT_VH}vh` }} className="relative">
-        <div className="sticky top-0 h-screen w-full overflow-hidden bg-background">
+        <div className="sticky top-0 h-screen w-full overflow-hidden">
 
-          {/* Canvas (behind everything, fades in after transition) */}
-          <div ref={canvasWrapRef} className="absolute inset-0 z-10" style={{ opacity: 0 }}>
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 w-full h-full"
-              style={{ willChange: "transform", transform: "translateZ(0)" }}
-            />
-            {/* Edge feathering on canvas */}
-            <div className="absolute inset-0 pointer-events-none" style={{
-              background: `
-                linear-gradient(to right, ${bgColor} 0%, transparent 5%),
-                linear-gradient(to left, ${bgColor} 0%, transparent 5%),
-                linear-gradient(to bottom, ${bgColor} 0%, transparent 5%),
-                linear-gradient(to top, ${bgColor} 0%, transparent 5%)
-              `,
-            }} />
-          </div>
+          {/* Canvas — always visible, shows frame 0 initially = the "hero image" */}
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full z-10"
+            style={{ willChange: "transform", transform: "translateZ(0)" }}
+          />
 
-          {/* Hero grid layout — text left, image right */}
-          <div className="absolute inset-0 z-20 flex items-center">
-            <div className="max-w-7xl mx-auto px-4 w-full grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-16 items-center">
+          {/* Edge feathering */}
+          <div className="absolute inset-0 pointer-events-none z-20" style={{
+            background: `
+              linear-gradient(to right, ${bgColor} 0%, transparent 5%),
+              linear-gradient(to left, ${bgColor} 0%, transparent 5%),
+              linear-gradient(to bottom, ${bgColor} 0%, transparent 5%),
+              linear-gradient(to top, ${bgColor} 0%, transparent 5%)
+            `,
+          }} />
 
-              {/* Text column — fades out on scroll */}
-              <div ref={textRef}>
-                <span className="inline-block rounded-full px-3.5 py-1.5 text-[10px] uppercase tracking-[0.2em] font-medium bg-primary/10 text-primary mb-6">
-                  Meisterbetrieb seit 1985
-                </span>
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-foreground tracking-tight leading-[1.1] mb-6">
-                  Ihr Maler aus{" "}
-                  <span className="text-primary">Burgfarrnbach</span>
-                </h1>
-                <p className="text-lg lg:text-xl text-muted-foreground max-w-md mb-10 leading-relaxed">
-                  Professionelle Maler- und Lackierarbeiten mit über 40 Jahren Erfahrung.
-                  Von Fassadengestaltung bis dekorativer Wandtechnik.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <a
-                    href="/contact"
-                    className="px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-full hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 shadow-[0_4px_20px_rgba(0,128,128,0.15)] text-center"
-                    style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
-                  >
-                    Kostenloses Angebot
-                  </a>
-                  <a
-                    href="tel:091197794971"
-                    className="px-8 py-4 border border-foreground/20 text-foreground font-medium rounded-full hover:bg-foreground/5 hover:border-foreground/40 transition-all duration-500 text-center"
-                    style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
-                  >
-                    0911 / 977 949 71
-                  </a>
+          {/* Hero text panel — covers left side, fades out on scroll */}
+          <div
+            ref={heroPanelRef}
+            className="absolute inset-0 z-30 flex items-center pointer-events-none"
+          >
+            {/* Left half background + text */}
+            <div className="w-full max-w-7xl mx-auto px-4 relative">
+              <div className="max-w-lg relative pointer-events-auto">
+                {/* White backing so text is readable over canvas */}
+                <div className="absolute -inset-8 -left-[40vw] bg-background" style={{
+                  background: `linear-gradient(to right, var(--color-background) 70%, transparent 100%)`,
+                }} />
+                <div className="relative">
+                  <span className="inline-block rounded-full px-3.5 py-1.5 text-[10px] uppercase tracking-[0.2em] font-medium bg-primary/10 text-primary mb-6">
+                    Meisterbetrieb seit 1985
+                  </span>
+                  <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-foreground tracking-tight leading-[1.1] mb-6">
+                    Ihr Maler aus{" "}
+                    <span className="text-primary">Burgfarrnbach</span>
+                  </h1>
+                  <p className="text-lg lg:text-xl text-muted-foreground max-w-md mb-10 leading-relaxed">
+                    Professionelle Maler- und Lackierarbeiten mit über 40 Jahren Erfahrung.
+                    Von Fassadengestaltung bis dekorativer Wandtechnik.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <a
+                      href="/contact"
+                      className="px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-full hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 shadow-[0_4px_20px_rgba(0,128,128,0.15)] text-center"
+                      style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                    >
+                      Kostenloses Angebot
+                    </a>
+                    <a
+                      href="tel:091197794971"
+                      className="px-8 py-4 border border-foreground/20 text-foreground font-medium rounded-full hover:bg-foreground/5 hover:border-foreground/40 transition-all duration-500 text-center"
+                      style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
+                    >
+                      0911 / 977 949 71
+                    </a>
+                  </div>
                 </div>
               </div>
-
-              {/* Image column — grows to fullscreen on scroll */}
-              <div
-                ref={heroImageRef}
-                className="relative aspect-[4/3] md:aspect-square overflow-visible"
-                style={{ transformOrigin: "center center" }}
-              >
-                <Image
-                  src="/start_frame.png"
-                  alt="Maler Dorberth — Professionelle Malerarbeiten"
-                  fill
-                  priority
-                  className="object-cover"
-                />
-                {/* Gradient edges so image blends seamlessly */}
-                <div className="absolute inset-0 pointer-events-none" style={{
-                  background: `
-                    linear-gradient(to right, var(--color-background) 0%, transparent 12%),
-                    linear-gradient(to left, var(--color-background) 0%, transparent 8%),
-                    linear-gradient(to bottom, var(--color-background) 0%, transparent 15%),
-                    linear-gradient(to top, var(--color-background) 0%, transparent 12%)
-                  `,
-                }} />
-              </div>
-
             </div>
           </div>
 
