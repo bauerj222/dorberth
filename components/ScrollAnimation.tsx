@@ -102,7 +102,7 @@ export default function ScrollAnimation() {
 
     const dx = vw / 2 - centerX;
     const dy = vh / 2 - centerY;
-    const scale = Math.max(vw / rect.width, vh / rect.height) * 1.02;
+    const scale = Math.max(vw / rect.width, vh / rect.height);
 
     transformTargetRef.current = { dx, dy, scale };
   }, []);
