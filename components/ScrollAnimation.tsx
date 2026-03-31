@@ -5,12 +5,6 @@ import { useEffect, useRef, useState, useCallback } from "react";
 const TOTAL_FRAMES = 120;
 const SCROLL_HEIGHT_VH = 400;
 
-// Scroll phases
-const HERO_END = 0.06;        // Hero text visible
-const TRANSITION_END = 0.14;  // Hero panel fades away
-const ANIM_START = 0.14;      // Frame animation begins
-const ANIM_END = 1.0;
-
 export default function ScrollAnimation() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -20,8 +14,6 @@ export default function ScrollAnimation() {
   const lastFrameRef = useRef(-1);
   const bgColorRef = useRef("#FFFFFF");
   const rafRef = useRef<number | null>(null);
-
-  const heroPanelRef = useRef<HTMLDivElement>(null);
 
   const [loaded, setLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
@@ -50,6 +42,7 @@ export default function ScrollAnimation() {
     }
   }, []);
 
+  // Cover mode — image fills entire viewport
   const drawFrame = useCallback((frameIndex: number) => {
     if (frameIndex === lastFrameRef.current) return;
     lastFrameRef.current = frameIndex;
@@ -79,37 +72,27 @@ export default function ScrollAnimation() {
     ctx.drawImage(img, dx, dy, dw, dh);
   }, []);
 
-  // Scroll handler
+  // Scroll handler — maps scroll position to frame index
+  const onScroll = useCallback(() => {
+    if (!loaded || !sectionRef.current) return;
+
+    const rect = sectionRef.current.getBoundingClientRect();
+    const sectionHeight = rect.height - window.innerHeight;
+    const progress = Math.max(0, Math.min(1, -rect.top / sectionHeight));
+    const frameIndex = Math.min(TOTAL_FRAMES - 1, Math.max(0, Math.floor(progress * TOTAL_FRAMES)));
+
+    drawFrame(frameIndex);
+  }, [loaded, drawFrame]);
+
+  // rAF-throttled scroll listener
   useEffect(() => {
     if (!loaded) return;
 
     const handleScroll = () => {
       if (rafRef.current) return;
       rafRef.current = requestAnimationFrame(() => {
+        onScroll();
         rafRef.current = null;
-
-        const section = sectionRef.current;
-        if (!section) return;
-
-        const rect = section.getBoundingClientRect();
-        const sectionHeight = rect.height - window.innerHeight;
-        const progress = Math.max(0, Math.min(1, -rect.top / sectionHeight));
-
-        // Hero panel fades out + slides up
-        const heroP = Math.max(0, Math.min(1, (progress - HERO_END) / (TRANSITION_END - HERO_END)));
-        if (heroPanelRef.current) {
-          heroPanelRef.current.style.opacity = String(1 - heroP);
-          heroPanelRef.current.style.transform = `translateY(${-heroP * 60}px)`;
-        }
-
-        // Frame animation (scroll-linked, reversible)
-        if (progress >= ANIM_START) {
-          const frameProgress = (progress - ANIM_START) / (ANIM_END - ANIM_START);
-          const frameIndex = Math.min(TOTAL_FRAMES - 1, Math.max(0, Math.floor(frameProgress * TOTAL_FRAMES)));
-          drawFrame(frameIndex);
-        } else {
-          drawFrame(0);
-        }
       });
     };
 
@@ -120,7 +103,7 @@ export default function ScrollAnimation() {
       window.removeEventListener("scroll", handleScroll);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [loaded, drawFrame]);
+  }, [loaded, onScroll]);
 
   // Preload images
   useEffect(() => {
@@ -151,7 +134,7 @@ export default function ScrollAnimation() {
     }
   }, [setupCanvas]);
 
-  // Sample BG color
+  // Sample BG color from first frame
   useEffect(() => {
     if (loaded && imagesRef.current[0]) {
       const img = imagesRef.current[0];
@@ -173,18 +156,19 @@ export default function ScrollAnimation() {
     }
   }, [loaded, drawFrame, setupCanvas]);
 
-  // Resize
+  // Resize handler
   useEffect(() => {
     const handleResize = () => {
       if (loaded) {
         sizeRef.current = { w: 0, h: 0 };
         lastFrameRef.current = -1;
         setupCanvas();
+        onScroll();
       }
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [loaded, setupCanvas]);
+  }, [loaded, setupCanvas, onScroll]);
 
   return (
     <>
@@ -204,19 +188,16 @@ export default function ScrollAnimation() {
         </div>
       )}
 
-      {/* Hero + Animation */}
+      {/* Animation section */}
       <div ref={sectionRef} style={{ height: `${SCROLL_HEIGHT_VH}vh` }} className="relative">
         <div className="sticky top-0 h-screen w-full overflow-hidden">
-
-          {/* Canvas — always visible, shows frame 0 initially = the "hero image" */}
           <canvas
             ref={canvasRef}
-            className="absolute inset-0 w-full h-full z-10"
-            style={{ willChange: "transform", transform: "translateZ(0)" }}
+            className="absolute inset-0 w-full h-full"
+            style={{ background: "#FFFFFF", willChange: "transform", transform: "translateZ(0)" }}
           />
-
           {/* Edge feathering */}
-          <div className="absolute inset-0 pointer-events-none z-20" style={{
+          <div className="absolute inset-0 pointer-events-none z-10" style={{
             background: `
               linear-gradient(to right, ${bgColor} 0%, transparent 5%),
               linear-gradient(to left, ${bgColor} 0%, transparent 5%),
@@ -224,52 +205,6 @@ export default function ScrollAnimation() {
               linear-gradient(to top, ${bgColor} 0%, transparent 5%)
             `,
           }} />
-
-          {/* Hero text panel — covers left side, fades out on scroll */}
-          <div
-            ref={heroPanelRef}
-            className="absolute inset-0 z-30 flex items-center pointer-events-none"
-          >
-            {/* Left half background + text */}
-            <div className="w-full max-w-7xl mx-auto px-4 relative">
-              <div className="max-w-lg relative pointer-events-auto">
-                {/* White backing so text is readable over canvas */}
-                <div className="absolute -inset-8 -left-[40vw] bg-background" style={{
-                  background: `linear-gradient(to right, var(--color-background) 70%, transparent 100%)`,
-                }} />
-                <div className="relative">
-                  <span className="inline-block rounded-full px-3.5 py-1.5 text-[10px] uppercase tracking-[0.2em] font-medium bg-primary/10 text-primary mb-6">
-                    Meisterbetrieb seit 1985
-                  </span>
-                  <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-foreground tracking-tight leading-[1.1] mb-6">
-                    Ihr Maler aus{" "}
-                    <span className="text-primary">Burgfarrnbach</span>
-                  </h1>
-                  <p className="text-lg lg:text-xl text-muted-foreground max-w-md mb-10 leading-relaxed">
-                    Professionelle Maler- und Lackierarbeiten mit über 40 Jahren Erfahrung.
-                    Von Fassadengestaltung bis dekorativer Wandtechnik.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <a
-                      href="/contact"
-                      className="px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-full hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 shadow-[0_4px_20px_rgba(0,128,128,0.15)] text-center"
-                      style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
-                    >
-                      Kostenloses Angebot
-                    </a>
-                    <a
-                      href="tel:091197794971"
-                      className="px-8 py-4 border border-foreground/20 text-foreground font-medium rounded-full hover:bg-foreground/5 hover:border-foreground/40 transition-all duration-500 text-center"
-                      style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" }}
-                    >
-                      0911 / 977 949 71
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
         </div>
       </div>
     </>
